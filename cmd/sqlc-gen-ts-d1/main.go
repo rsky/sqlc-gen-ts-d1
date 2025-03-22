@@ -63,10 +63,10 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
 		if !workersTypesGenerated {
-			header.WriteString("import type { SqlStorage, SqlStorageCursor } from \"" + workersTypesPackage + "\"\n")
+			header.WriteString("import type { SqlStorage, SqlStorageCursor, SqlStorageValue } from \"" + workersTypesPackage + "\"\n")
 		}
 
-		querier.WriteString("type Query<T, U> = {\n")
+		querier.WriteString("type Query<T, U extends Record<string, SqlStorageValue>> = {\n")
 		querier.WriteString("  result(): T;\n")
 		querier.WriteString("  cursor(): SqlStorageCursor<U>;\n")
 		querier.WriteString("}\n")
@@ -184,12 +184,12 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 			if cmd := q.GetCmd(); cmd == ":one" {
 				retType = rowType + " | null"
-				resultType = retType
+				resultType = rowType
 				if needRawType {
 					resultType = naming.toRawQueryRowTypeName(q)
 				}
 			} else if cmd == ":exec" {
-				retType = "SqlStorageCursor"
+				retType = "SqlStorageCursor<never>"
 			} else {
 				retType = "IterableIterator<" + rowType + ">"
 				resultType = rowType
@@ -206,7 +206,11 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				fmt.Fprintf(querier, "  args: %s", naming.toParamsTypeName(q))
 			}
 			querier.WriteString("\n")
-			fmt.Fprintf(querier, "): Query<%s, %s> {\n", retType, resultType)
+			if q.GetCmd() == ":exec" {
+				fmt.Fprintf(querier, "): %s {\n", retType)
+			} else {
+				fmt.Fprintf(querier, "): Query<%s, %s> {\n", retType, resultType)
+			}
 
 			var queryVar string
 			var bindArgs string
@@ -245,58 +249,52 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				bindArgs = buildBindArgs(q)
 			}
 
-			switch q.GetCmd() {
-			case ":one":
+			if q.GetCmd() == ":exec" {
+				fmt.Fprintf(querier, "  return sql.exec(%s", queryVar)
+			} else {
 				fmt.Fprintf(querier, "  const cursor = sql.exec<%s>(%s", resultType, queryVar)
-			case ":many":
-				fmt.Fprintf(querier, "  const cursor = sql.exec<%s>(%s", resultType, queryVar)
-			case ":exec":
-				fmt.Fprintf(querier, "  const cursor = sql.exec(%s", queryVar)
 			}
 			if len(q.GetParams()) > 0 {
 				fmt.Fprintf(querier, ", %s", bindArgs)
 			}
 			querier.WriteString(");\n")
 
-			if q.GetCmd() == ":exec" {
-				querier.WriteString("  return cursor;\n")
+			if q.GetCmd() != ":exec" {
+				querier.WriteString("  return {\n")
+				if q.GetCmd() == ":one" {
+					querier.WriteString("    result() {\n")
+					querier.WriteString("      const result = cursor.next();\n")
+					querier.WriteString("      if (result.done) {\n")
+					querier.WriteString("        return null;\n")
+					querier.WriteString("      }\n")
+					querier.WriteString("      const raw = result.value;\n")
+					// 內部結果型を使っている場合は結果型に変換する処理を生成する
+					if needRawType {
+						querier.WriteString("      return {\n")
+						writeFromRawMapping(querier, "        ", tableMap, q)
+						querier.WriteString("      };\n")
+					} else {
+						querier.WriteString("      return raw;\n")
+					}
+					querier.WriteString("    },\n")
+				} else {
+					querier.WriteString("    *result() {\n")
+					querier.WriteString("      for (const raw of cursor) {\n")
+					if needRawType {
+						querier.WriteString("        yield {\n")
+						writeFromRawMapping(querier, "          ", tableMap, q)
+						querier.WriteString("        };\n")
+					} else {
+						querier.WriteString("        yield raw;\n")
+					}
+					querier.WriteString("      }\n")
+					querier.WriteString("    },\n")
+				}
+				fmt.Fprintf(querier, "    cursor() { return cursor; },\n")
+				fmt.Fprintf(querier, "  }\n")
 			}
 
-			querier.WriteString("  return {\n")
-
-			if q.GetCmd() == ":one" {
-				querier.WriteString("    result() {\n")
-				querier.WriteString("      const result = cursor.raw().next();\n")
-				querier.WriteString("      if (result.done) {\n")
-				querier.WriteString("        return null;\n")
-				querier.WriteString("      }\n")
-				querier.WriteString("      const raw = result.value;\n")
-				// 內部結果型を使っている場合は結果型に変換する処理を生成する
-				if needRawType {
-					querier.WriteString("      return {\n")
-					writeFromRawMapping(querier, "        ", tableMap, q)
-					querier.WriteString("      };\n")
-				} else {
-					querier.WriteString("      return raw;\n")
-				}
-				querier.WriteString("    },\n")
-			} else {
-				querier.WriteString("    *result() {\n")
-				querier.WriteString("      for (const raw of cursor) {\n")
-				if needRawType {
-					querier.WriteString("        yield {\n")
-					writeFromRawMapping(querier, "          ", tableMap, q)
-					querier.WriteString("        };\n")
-				} else {
-					querier.WriteString("        yield raw;\n")
-				}
-				querier.WriteString("      }\n")
-				querier.WriteString("    },\n")
-			}
-			fmt.Fprintf(querier, "    cursor() { return cursor; },\n")
-			fmt.Fprintf(querier, "  }\n")
 			querier.WriteString("}\n")
-
 			querier.WriteByte('\n')
 		}
 
@@ -318,7 +316,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				models = append(models, k)
 			}
 			sort.Strings(models)
-			fmt.Fprintf(header, "import { %s } from \"./models\"\n", strings.Join(models, ", "))
+			fmt.Fprintf(header, "import type { %s } from \"./models\"\n", strings.Join(models, ", "))
 		}
 		if header.Len() > 0 {
 			header.WriteString("\n")

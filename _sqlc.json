@@ -17,10 +17,7 @@
       "codegen": [
         {
           "out": "src/gen/sqlc",
-          "plugin": "ts-sqlstorage",
-          "options": {
-            "workers-types-generated": "1"
-          }
+          "plugin": "ts-sqlstorage"
         }
       ]
     }
