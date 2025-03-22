@@ -2,10 +2,10 @@
   "version": "2",
   "plugins": [
     {
-      "name": "ts-d1",
+      "name": "ts-sqlstorage",
       "wasm": {
-        "url": "file://bin/sqlc-gen-ts-d1.wasm",
-        "sha256": "169773bef3730638dff80a5736aa9ed510a77fa820d9e43eab692bfd794a73e1"
+        "url": "file://bin/sqlc-gen-ts-do-sqlstorage.wasm",
+        "sha256": "521b3f950112e10ac03363637b440608da86d3df9db11a36a195bb3e511eb0e8"
       }
     }
   ],
@@ -17,7 +17,7 @@
       "codegen": [
         {
           "out": "src/gen/sqlc",
-          "plugin": "ts-d1",
+          "plugin": "ts-sqlstorage",
           "options": {
             "workers-types": "experimental"
           }
