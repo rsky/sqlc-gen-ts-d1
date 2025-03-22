@@ -66,11 +66,17 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			header.WriteString("import type { SqlStorage, SqlStorageCursor, SqlStorageValue } from \"" + workersTypesPackage + "\"\n")
 		}
 
-		querier.WriteString("type ManyResult<T, U extends Record<string, SqlStorageValue>> = {\n")
-		querier.WriteString("  toArray(): T[];\n")
-		querier.WriteString("  cursor(): SqlStorageCursor<U>;\n")
-		querier.WriteString("  [Symbol.iterator](): IterableIterator<T>;\n")
-		querier.WriteString("}\n")
+		for _, q := range request.GetQueries() {
+			if q.GetCmd() == ":many" {
+				querier.WriteString("type Query<T, U extends Record<string, SqlStorageValue>> = {\n")
+				querier.WriteString("  toArray(): T[];\n")
+				querier.WriteString("  cursor(): SqlStorageCursor<U>;\n")
+				querier.WriteString("  [Symbol.iterator](): IterableIterator<T>;\n")
+				querier.WriteString("}\n")
+				querier.WriteString("\n")
+				break
+			}
+		}
 
 		requireModels := map[string]bool{}
 		requireExpandedParams := false
@@ -208,7 +214,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 			querier.WriteString("\n")
 			if q.GetCmd() == ":many" {
-				fmt.Fprintf(querier, "): ManyResult<%s, %s> {\n", retType, resultType)
+				fmt.Fprintf(querier, "): Query<%s, %s> {\n", retType, resultType)
 			} else {
 				fmt.Fprintf(querier, "): %s {\n", retType)
 			}
@@ -276,7 +282,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				}
 			} else if cmd == ":many" {
 				if needRawType {
-					fmt.Fprintf(querier, "  function mapToReturnType(raw: %s) {\n", resultType)
+					fmt.Fprintf(querier, "  function mapToReturnType(raw: %s): %s {\n", resultType, retType)
 					querier.WriteString("    return {\n")
 					writeFromRawMapping(querier, "        ", tableMap, q)
 					querier.WriteString("    };\n")
