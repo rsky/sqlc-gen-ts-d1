@@ -284,7 +284,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				if needRawType {
 					fmt.Fprintf(querier, "  function mapToReturnType(raw: %s): %s {\n", resultType, retType)
 					querier.WriteString("    return {\n")
-					writeFromRawMapping(querier, "        ", tableMap, q)
+					writeFromRawMapping(querier, "      ", tableMap, q)
 					querier.WriteString("    };\n")
 					querier.WriteString("  }\n")
 					querier.WriteString("  return {\n")
