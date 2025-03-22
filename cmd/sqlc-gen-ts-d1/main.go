@@ -317,7 +317,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				models = append(models, k)
 			}
 			sort.Strings(models)
-			fmt.Fprintf(header, "import { %s } from \"./models\"\n", strings.Join(models, ", "))
+			fmt.Fprintf(header, "import type { %s } from \"./models\"\n", strings.Join(models, ", "))
 		}
 		if header.Len() > 0 {
 			header.WriteString("\n")
