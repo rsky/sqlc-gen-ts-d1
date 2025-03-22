@@ -28,6 +28,7 @@ plugin のオプションにはカンマ区切りの `key=value` 形式文字列
 
 * `workers-types-v3=1`: `@cloudflare/workers-types` の v3 のために import 文を出力しないようになります (デフォルトは0)
 * `workers-types=2022-11-30`: `@cloudflare/workers-types` の v4 の import する細かいバージョンを指定できます (デフォルトは2022-11-30)
+* `workers-types-generated=1`: `wrangler types` で生成された `worker-configuration.d.ts` を使用するために `@cloudflare/workers-types` の import 文を出力しないようになります (デフォルトは0)
 
 ## License
 MIT
