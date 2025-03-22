@@ -63,7 +63,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
 		if !workersTypesV3 {
-			header.WriteString("import { D1Database, D1PreparedStatement, D1Result } from \"" + workersTypesPackage + "\"\n")
+			header.WriteString("import type { D1Database, D1PreparedStatement, D1Result } from \"" + workersTypesPackage + "\"\n")
 		}
 
 		querier.WriteString("type Query<T> = {\n")
