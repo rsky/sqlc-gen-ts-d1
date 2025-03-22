@@ -103,7 +103,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 
 			query := "-- name: " + q.GetName() + " " + q.GetCmd() + "\n" + queryText
-			fmt.Fprintf(querier, "const %s = `%s`;\n", naming.toConstQueryName(q), query)
+			fmt.Fprintf(querier, "const %s = `%s` as const;\n", naming.toConstQueryName(q), query)
 
 			querier.WriteByte('\n')
 
@@ -233,7 +233,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				//    SELECT id, a, b FROM foo WHERE a = ?1 AND id IN (/*SLICE:ids*/?) AND b = ?3
 				//  実行時(idsが長さ3の場合):
 				//    SELECT id, a, b FROM foo WHERE a = ?1 AND id IN (?2, ?4, ?5) AND b = ?3
-				fmt.Fprintf(querier, "  let query = %s;\n", naming.toConstQueryName(q))
+				fmt.Fprintf(querier, "  let query = %s.toString();\n", naming.toConstQueryName(q))
 				fmt.Fprintf(querier, "  const params: any[] = [%s];\n", buildBindArgs(q))
 				for _, p := range q.GetParams() {
 					c := p.GetColumn()
