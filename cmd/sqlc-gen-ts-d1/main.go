@@ -63,12 +63,12 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
 		if !workersTypesGenerated {
-			header.WriteString("import type { SqlStorage, SqlStorageCursor, SqlStorageStatement } from \"" + workersTypesPackage + "\"\n")
+			header.WriteString("import type { SqlStorage, SqlStorageCursor } from \"" + workersTypesPackage + "\"\n")
 		}
 
-		querier.WriteString("type Query<T> = {\n")
-		querier.WriteString("  then(onFulfilled?: (value: T) => void, onRejected?: (reason?: any) => void): void;\n")
-		querier.WriteString("  batch(): SqlStorageStatement;\n")
+		querier.WriteString("type Query<T, U> = {\n")
+		querier.WriteString("  result(): T;\n")
+		querier.WriteString("  cursor(): SqlStorageCursor<U>;\n")
 		querier.WriteString("}\n")
 
 		requireModels := map[string]bool{}
@@ -186,12 +186,12 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				retType = rowType + " | null"
 				resultType = retType
 				if needRawType {
-					resultType = naming.toRawQueryRowTypeName(q) + " | null"
+					resultType = naming.toRawQueryRowTypeName(q)
 				}
 			} else if cmd == ":exec" {
 				retType = "SqlStorageCursor"
 			} else {
-				retType = "SqlStorageCursor<" + rowType + ">"
+				retType = "IterableIterator<" + rowType + ">"
 				resultType = rowType
 				if needRawType {
 					resultType = naming.toRawQueryRowTypeName(q)
@@ -206,7 +206,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				fmt.Fprintf(querier, "  args: %s", naming.toParamsTypeName(q))
 			}
 			querier.WriteString("\n")
-			fmt.Fprintf(querier, "): Query<%s> {\n", retType)
+			fmt.Fprintf(querier, "): Query<%s, %s> {\n", retType, resultType)
 
 			var queryVar string
 			var bindArgs string
@@ -245,44 +245,55 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				bindArgs = buildBindArgs(q)
 			}
 
-			fmt.Fprintf(querier, "  const ps = sql\n")
-			fmt.Fprintf(querier, "    .prepare(%s)", queryVar)
-			if len(q.GetParams()) > 0 {
-				querier.WriteString("\n")
-				fmt.Fprintf(querier, "    .bind(%s)", bindArgs)
-			}
-			querier.WriteString(";\n")
-
-			fmt.Fprintf(querier, "  return {\n")
-			fmt.Fprintf(querier, "    then(onFulfilled?: (value: %s) => void, onRejected?: (reason?: any) => void) {\n", retType)
-
 			switch q.GetCmd() {
 			case ":one":
-				fmt.Fprintf(querier, "      ps.first<%s>()\n", resultType)
+				fmt.Fprintf(querier, "  const cursor = sql.exec<%s>(%s", resultType, queryVar)
 			case ":many":
-				fmt.Fprintf(querier, "      ps.all<%s>()\n", resultType)
+				fmt.Fprintf(querier, "  const cursor = sql.exec<%s>(%s", resultType, queryVar)
 			case ":exec":
-				fmt.Fprintf(querier, "      ps.run()\n")
+				fmt.Fprintf(querier, "  const cursor = sql.exec(%s", queryVar)
+			}
+			if len(q.GetParams()) > 0 {
+				fmt.Fprintf(querier, ", %s", bindArgs)
+			}
+			querier.WriteString(");\n")
+
+			if q.GetCmd() == ":exec" {
+				querier.WriteString("  return cursor;\n")
 			}
 
-			// 內部結果型を使っている場合は結果型に変換する処理を生成する
-			if needRawType {
-				if q.GetCmd() == ":one" {
-					fmt.Fprintf(querier, "        .then((raw: %s) => raw ? {\n", resultType)
-					writeFromRawMapping(querier, "          ", tableMap, q)
-					fmt.Fprintf(querier, "        } : null)\n")
+			querier.WriteString("  return {\n")
+
+			if q.GetCmd() == ":one" {
+				querier.WriteString("    result() {\n")
+				querier.WriteString("      const result = cursor.raw().next();\n")
+				querier.WriteString("      if (result.done) {\n")
+				querier.WriteString("        return null;\n")
+				querier.WriteString("      }\n")
+				querier.WriteString("      const raw = result.value;\n")
+				// 內部結果型を使っている場合は結果型に変換する処理を生成する
+				if needRawType {
+					querier.WriteString("      return {\n")
+					writeFromRawMapping(querier, "        ", tableMap, q)
+					querier.WriteString("      };\n")
 				} else {
-					fmt.Fprintf(querier, "        .then((r: SqlStorageCursor<%s>) => { return {\n", resultType)
-					fmt.Fprintf(querier, "          ...r,\n")
-					fmt.Fprintf(querier, "          results: r.results.map((raw: %s) => { return {\n", resultType)
-					writeFromRawMapping(querier, "            ", tableMap, q)
-					fmt.Fprintf(querier, "          }}),\n")
-					fmt.Fprintf(querier, "        }})\n")
+					querier.WriteString("      return raw;\n")
 				}
+				querier.WriteString("    },\n")
+			} else {
+				querier.WriteString("    *result() {\n")
+				querier.WriteString("      for (const raw of cursor) {\n")
+				if needRawType {
+					querier.WriteString("        yield {\n")
+					writeFromRawMapping(querier, "          ", tableMap, q)
+					querier.WriteString("        };\n")
+				} else {
+					querier.WriteString("        yield raw;\n")
+				}
+				querier.WriteString("      }\n")
+				querier.WriteString("    },\n")
 			}
-			fmt.Fprintf(querier, "        .then(onFulfilled).catch(onRejected);\n")
-			fmt.Fprintf(querier, "    },\n")
-			fmt.Fprintf(querier, "    batch() { return ps; },\n")
+			fmt.Fprintf(querier, "    cursor() { return cursor; },\n")
 			fmt.Fprintf(querier, "  }\n")
 			querier.WriteString("}\n")
 
