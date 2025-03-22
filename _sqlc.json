@@ -19,7 +19,7 @@
           "out": "src/gen/sqlc",
           "plugin": "ts-sqlstorage",
           "options": {
-            "workers-types": "experimental"
+            "workers-types-generated": "1"
           }
         }
       ]

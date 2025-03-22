@@ -20,13 +20,13 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse option: %w", err)
 	}
-	workersTypesVersion := "2022-11-30"
+	workersTypesVersion := ""
 	if v, ok := options["workers-types"]; ok {
 		workersTypesVersion = v
 	}
-	workersTypesV3 := false
-	if v, ok := options["workers-types-v3"]; ok {
-		workersTypesV3 = v == "1"
+	workersTypesGenerated := false
+	if v, ok := options["workers-types-generated"]; ok {
+		workersTypesGenerated = v == "1"
 	}
 
 	tsTypeMap := buildTsTypeMap(request.GetSettings())
@@ -62,7 +62,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
-		if !workersTypesV3 {
+		if !workersTypesGenerated {
 			header.WriteString("import { D1Database, D1PreparedStatement, D1Result } from \"" + workersTypesPackage + "\"\n")
 		}
 
@@ -274,15 +274,9 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				} else {
 					fmt.Fprintf(querier, "        .then((r: D1Result<%s>) => { return {\n", resultType)
 					fmt.Fprintf(querier, "          ...r,\n")
-					if workersTypesV3 {
-						fmt.Fprintf(querier, "          results: r.results ? r.results.map((raw: %s) => { return {\n", resultType)
-						writeFromRawMapping(querier, "             ", tableMap, q)
-						fmt.Fprintf(querier, "          }}) : undefined,\n")
-					} else {
-						fmt.Fprintf(querier, "          results: r.results.map((raw: %s) => { return {\n", resultType)
-						writeFromRawMapping(querier, "            ", tableMap, q)
-						fmt.Fprintf(querier, "          }}),\n")
-					}
+					fmt.Fprintf(querier, "          results: r.results.map((raw: %s) => { return {\n", resultType)
+					writeFromRawMapping(querier, "            ", tableMap, q)
+					fmt.Fprintf(querier, "          }}),\n")
 					fmt.Fprintf(querier, "        }})\n")
 				}
 			}
