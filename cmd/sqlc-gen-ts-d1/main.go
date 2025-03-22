@@ -267,14 +267,14 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					querier.WriteString("      if (result.done) {\n")
 					querier.WriteString("        return null;\n")
 					querier.WriteString("      }\n")
-					querier.WriteString("      const raw = result.value;\n")
 					// 內部結果型を使っている場合は結果型に変換する処理を生成する
 					if needRawType {
+						querier.WriteString("      const raw = result.value;\n")
 						querier.WriteString("      return {\n")
 						writeFromRawMapping(querier, "        ", tableMap, q)
 						querier.WriteString("      };\n")
 					} else {
-						querier.WriteString("      return raw;\n")
+						querier.WriteString("      return result.value;\n")
 					}
 					querier.WriteString("    },\n")
 				} else {
