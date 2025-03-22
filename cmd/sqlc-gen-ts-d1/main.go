@@ -63,12 +63,12 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
 		if !workersTypesGenerated {
-			header.WriteString("import { D1Database, D1PreparedStatement, D1Result } from \"" + workersTypesPackage + "\"\n")
+			header.WriteString("import type { SqlStorage, SqlStorageCursor, SqlStorageStatement } from \"" + workersTypesPackage + "\"\n")
 		}
 
 		querier.WriteString("type Query<T> = {\n")
 		querier.WriteString("  then(onFulfilled?: (value: T) => void, onRejected?: (reason?: any) => void): void;\n")
-		querier.WriteString("  batch(): D1PreparedStatement;\n")
+		querier.WriteString("  batch(): SqlStorageStatement;\n")
 		querier.WriteString("}\n")
 
 		requireModels := map[string]bool{}
@@ -189,9 +189,9 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					resultType = naming.toRawQueryRowTypeName(q) + " | null"
 				}
 			} else if cmd == ":exec" {
-				retType = "D1Result"
+				retType = "SqlStorageCursor"
 			} else {
-				retType = "D1Result<" + rowType + ">"
+				retType = "SqlStorageCursor<" + rowType + ">"
 				resultType = rowType
 				if needRawType {
 					resultType = naming.toRawQueryRowTypeName(q)
@@ -199,7 +199,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 
 			fmt.Fprintf(querier, "export function %s(\n", naming.toFunctionName(q))
-			fmt.Fprintf(querier, "  d1: D1Database")
+			fmt.Fprintf(querier, "  sql: SqlStorage")
 			// パラメータがないときは引数を追加しない
 			if len(q.GetParams()) > 0 {
 				querier.WriteString(",\n")
@@ -245,7 +245,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				bindArgs = buildBindArgs(q)
 			}
 
-			fmt.Fprintf(querier, "  const ps = d1\n")
+			fmt.Fprintf(querier, "  const ps = sql\n")
 			fmt.Fprintf(querier, "    .prepare(%s)", queryVar)
 			if len(q.GetParams()) > 0 {
 				querier.WriteString("\n")
@@ -272,7 +272,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					writeFromRawMapping(querier, "          ", tableMap, q)
 					fmt.Fprintf(querier, "        } : null)\n")
 				} else {
-					fmt.Fprintf(querier, "        .then((r: D1Result<%s>) => { return {\n", resultType)
+					fmt.Fprintf(querier, "        .then((r: SqlStorageCursor<%s>) => { return {\n", resultType)
 					fmt.Fprintf(querier, "          ...r,\n")
 					fmt.Fprintf(querier, "          results: r.results.map((raw: %s) => { return {\n", resultType)
 					writeFromRawMapping(querier, "            ", tableMap, q)
