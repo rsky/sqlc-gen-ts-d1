@@ -3,7 +3,6 @@
 //   sqlc v1.28.0
 //   sqlc-gen-ts-d1 v0.0.0-a@221fa0c9bc8a438c3fe2f6e3a396ef36820bef43eeae100eaef273fd0b8fdb8e
 
-import type { D1Database, D1PreparedStatement, D1Result } from "@cloudflare/workers-types/experimental"
 import { Account } from "./models"
 
 type Query<T> = {

@@ -19,7 +19,7 @@
           "out": "src/gen/sqlc",
           "plugin": "ts-d1",
           "options": {
-            "workers-types": "experimental"
+            "workers-types-generated": "1"
           }
         }
       ]
