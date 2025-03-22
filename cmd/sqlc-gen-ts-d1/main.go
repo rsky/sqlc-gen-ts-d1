@@ -28,6 +28,10 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 	if v, ok := options["workers-types-v3"]; ok {
 		workersTypesV3 = v == "1"
 	}
+	workersTypesGenerated := false
+	if v, ok := options["workers-types-generated"]; ok {
+		workersTypesGenerated = v == "1"
+	}
 
 	tsTypeMap := buildTsTypeMap(request.GetSettings())
 	var files []*plugin.File
@@ -62,7 +66,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
-		if !workersTypesV3 {
+		if !workersTypesV3 && !workersTypesGenerated {
 			header.WriteString("import type { D1Database, D1PreparedStatement, D1Result } from \"" + workersTypesPackage + "\"\n")
 		}
 
