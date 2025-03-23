@@ -68,7 +68,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 		for _, q := range request.GetQueries() {
 			if q.GetCmd() == ":many" {
-				querier.WriteString("type Query<T, U extends Record<string, SqlStorageValue>> = {\n")
+				querier.WriteString("type Cursor<T, U extends Record<string, SqlStorageValue>> = {\n")
 				querier.WriteString("  toArray(): T[];\n")
 				querier.WriteString("  cursor(): SqlStorageCursor<U>;\n")
 				querier.WriteString("  [Symbol.iterator](): IterableIterator<T>;\n")
@@ -214,7 +214,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 			querier.WriteString("\n")
 			if q.GetCmd() == ":many" {
-				fmt.Fprintf(querier, "): Query<%s, %s> {\n", retType, resultType)
+				fmt.Fprintf(querier, "): Cursor<%s, %s> {\n", retType, resultType)
 			} else {
 				fmt.Fprintf(querier, "): %s {\n", retType)
 			}
@@ -282,24 +282,22 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				}
 			} else if cmd == ":many" {
 				if needRawType {
-					fmt.Fprintf(querier, "  function mapToReturnType(raw: %s): %s {\n", resultType, retType)
-					querier.WriteString("    return {\n")
-					writeFromRawMapping(querier, "      ", tableMap, q)
-					querier.WriteString("    };\n")
-					querier.WriteString("  }\n")
+					fmt.Fprintf(querier, "  const toReturnType = (raw: %s): %s => ({\n", resultType, retType)
+					writeFromRawMapping(querier, "    ", tableMap, q)
+					querier.WriteString("  });\n")
 					querier.WriteString("  return {\n")
-					querier.WriteString("    toArray() { return cursor.toArray().map(mapToReturnType); },\n")
-					querier.WriteString("    cursor() { return cursor; },\n")
+					querier.WriteString("    toArray: () => cursor.toArray().map(toReturnType),\n")
+					querier.WriteString("    cursor: () => cursor,\n")
 					querier.WriteString("    [Symbol.iterator]: function* () {\n")
 					querier.WriteString("      for (const raw of cursor) {\n")
-					querier.WriteString("        yield mapToReturnType(raw);\n")
+					querier.WriteString("        yield toReturnType(raw);\n")
 					querier.WriteString("      }\n")
 					querier.WriteString("    },\n")
 					querier.WriteString("  };\n")
 				} else {
 					querier.WriteString("  return {\n")
-					querier.WriteString("    toArray() { return cursor.toArray(); },\n")
-					querier.WriteString("    cursor() { return cursor; },\n")
+					querier.WriteString("    toArray: () => cursor.toArray(),\n")
+					querier.WriteString("    cursor: () => cursor,\n")
 					querier.WriteString("    [Symbol.iterator]: function* () {\n")
 					querier.WriteString("      for (const raw of cursor) {\n")
 					querier.WriteString("        yield raw;\n")
