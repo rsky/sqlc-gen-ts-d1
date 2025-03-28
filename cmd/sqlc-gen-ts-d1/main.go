@@ -16,17 +16,9 @@ import (
 
 // handler は sqlc で解析したスキーマとクエリの情報を元に生成するコードの情報を返す
 func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
-	options, err := parseOption(request.GetPluginOptions())
+	_, err := parseOption(request.GetPluginOptions())
 	if err != nil {
 		return nil, fmt.Errorf("parse option: %w", err)
-	}
-	workersTypesVersion := ""
-	if v, ok := options["workers-types"]; ok {
-		workersTypesVersion = v
-	}
-	workersTypesGenerated := false
-	if v, ok := options["workers-types-generated"]; ok {
-		workersTypesGenerated = v == "1"
 	}
 
 	tsTypeMap := buildTsTypeMap(request.GetSettings())
@@ -55,16 +47,8 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 
 		tableMap := buildTableMap(request.GetCatalog())
 
-		workersTypesPackage := "@cloudflare/workers-types"
-		if workersTypesVersion != "" {
-			workersTypesPackage += "/" + workersTypesVersion
-		}
-
 		header := bytes.NewBuffer(nil)
 		appendMeta(header, request)
-		if !workersTypesGenerated {
-			header.WriteString("import type { SqlStorage, SqlStorageCursor, SqlStorageValue } from \"" + workersTypesPackage + "\"\n")
-		}
 
 		for _, q := range request.GetQueries() {
 			if q.GetCmd() == ":many" {
