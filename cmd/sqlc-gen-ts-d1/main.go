@@ -115,7 +115,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 
 			needRawType := false
-			// :exec はレスポンスが返ってこないので型を生成しない
+			// :exec は影響行数を返すので型を生成しない
 			if q.GetCmd() != ":exec" {
 				fmt.Fprintf(querier, "export type %s = {\n", naming.toQueryRowTypeName(q))
 				for _, c := range q.GetColumns() {
@@ -182,7 +182,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					resultType = naming.toRawQueryRowTypeName(q)
 				}
 			} else if cmd == ":exec" {
-				retType = "void"
+				retType = "number"
 			} else {
 				retType = rowType
 				resultType = rowType
@@ -243,14 +243,21 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 			}
 
 			if q.GetCmd() == ":exec" {
-				fmt.Fprintf(querier, "  sql.exec(%s", queryVar)
+				if hasSqlcSlice(q) {
+					querier.WriteString("\n")
+				}
+				fmt.Fprintf(querier, "  return sql.exec(%s", queryVar)
 			} else {
 				fmt.Fprintf(querier, "  const cursor = sql.exec<%s>(%s", resultType, queryVar)
 			}
 			if len(q.GetParams()) > 0 {
 				fmt.Fprintf(querier, ", %s", bindArgs)
 			}
-			querier.WriteString(");\n")
+			if q.GetCmd() == ":exec" {
+				querier.WriteString(").rowsWritten;\n")
+			} else {
+				querier.WriteString(");\n")
+			}
 
 			if cmd := q.GetCmd(); cmd == ":one" {
 				querier.WriteString("  const row = cursor.next();\n")
@@ -260,10 +267,12 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				// 內部結果型を使っている場合は結果型に変換する処理を生成する
 				if needRawType {
 					querier.WriteString("  const raw = row.value;\n")
+					querier.WriteString("\n")
 					querier.WriteString("  return {\n")
 					writeFromRawMapping(querier, "    ", tableMap, q)
 					querier.WriteString("  };\n")
 				} else {
+					querier.WriteString("\n")
 					querier.WriteString("  return row.value;\n")
 				}
 			} else if cmd == ":many" {
@@ -271,25 +280,29 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 					fmt.Fprintf(querier, "  const toReturnType = (raw: %s): %s => ({\n", resultType, retType)
 					writeFromRawMapping(querier, "    ", tableMap, q)
 					querier.WriteString("  });\n")
-					querier.WriteString("  return {\n")
-					querier.WriteString("    toArray: () => cursor.toArray().map(toReturnType),\n")
-					querier.WriteString("    cursor: () => cursor,\n")
-					querier.WriteString("    [Symbol.iterator]: function* () {\n")
-					querier.WriteString("      for (const raw of cursor) {\n")
-					querier.WriteString("        yield toReturnType(raw);\n")
-					querier.WriteString("      }\n")
-					querier.WriteString("    },\n")
-					querier.WriteString("  };\n")
+					querier.WriteString(`
+  return {
+    toArray: () => cursor.toArray().map(toReturnType),
+    cursor: () => cursor,
+    [Symbol.iterator]: function* () {
+      for (const raw of cursor) {
+        yield toReturnType(raw);
+      }
+    },
+  };
+`)
 				} else {
-					querier.WriteString("  return {\n")
-					querier.WriteString("    toArray: () => cursor.toArray(),\n")
-					querier.WriteString("    cursor: () => cursor,\n")
-					querier.WriteString("    [Symbol.iterator]: function* () {\n")
-					querier.WriteString("      for (const raw of cursor) {\n")
-					querier.WriteString("        yield raw;\n")
-					querier.WriteString("      }\n")
-					querier.WriteString("    },\n")
-					querier.WriteString("  };\n")
+					querier.WriteString(`
+  return {
+    toArray: () => cursor.toArray(),
+    cursor: () => cursor,
+    [Symbol.iterator]: function* () {
+      for (const raw of cursor) {
+        yield raw;
+      }
+    },
+  }
+`)
 				}
 			}
 
@@ -304,6 +317,7 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
   for (let i = 1; i < len; i++) {
     params.push(last + i);
   }
+
   return "(" + params.map((x: number) => "?" + x).join(", ") + ")";
 }
 `)

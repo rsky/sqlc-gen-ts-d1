@@ -5,7 +5,7 @@
       "name": "ts-sqlstorage",
       "wasm": {
         "url": "file://bin/sqlc-gen-ts-do-sqlstorage.wasm",
-        "sha256": "f728a582575d5520aa1a888b10db402f54f3577e4cf5c3bc9ab72b5d863697e4"
+        "sha256": "8220f074da59df46c7ed9588ecb3d3991f2c5b8e754722de10e01e806124a7bf"
       }
     }
   ],
