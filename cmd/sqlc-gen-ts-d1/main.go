@@ -86,8 +86,10 @@ func handler(request *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
 				queryText = strings.Replace(queryText, strings.Join(olds, ", "), strings.Join(news, ", "), 1)
 			}
 
-			query := "-- name: " + q.GetName() + " " + q.GetCmd() + "\n" + queryText
-			fmt.Fprintf(querier, "const %s = `%s` as const;\n", naming.toConstQueryName(q), query)
+			// 先頭にコメントを含めると結果行の値がNULLになるので、クエリのみを出力する
+			// query := "-- name: " + q.GetName() + " " + q.GetCmd() + "\n" + queryText
+			// fmt.Fprintf(querier, "const %s = `%s` as const;\n", naming.toConstQueryName(q), query)
+			fmt.Fprintf(querier, "const %s = `%s` as const;\n", naming.toConstQueryName(q), queryText)
 
 			querier.WriteByte('\n')
 
